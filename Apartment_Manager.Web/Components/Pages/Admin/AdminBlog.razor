@@ -1,0 +1,193 @@
+@page "/admin/blog"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IBlogApiService BlogService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Manage Blog – Admin</PageTitle>
+
+<AdminLayout>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 class="admin-section-title" style="margin:0">Blog Posts</h2>
+        <button class="btn-primary btn-sm" @onclick="() => ShowForm(null)">+ New Post</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    @if (_showForm)
+    {
+        <div style="background:var(--color-bg-soft);border-radius:12px;padding:28px;margin-bottom:28px;border:1px solid var(--color-border)">
+            <h3 style="margin-bottom:20px">@(_editId.HasValue ? "Edit" : "New") Post</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="form-group">
+                    <label class="form-label">Title *</label>
+                    <input class="form-input" @bind="_form.Title" placeholder="Post title" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Slug *</label>
+                    <input class="form-input" @bind="_form.Slug" placeholder="url-friendly-slug" />
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <input class="form-input" @bind="_form.Category" placeholder="Beaches, Food, Travel" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cover Image URL</label>
+                    <input class="form-input" @bind="_form.ImageUrl" placeholder="https://..." />
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Excerpt</label>
+                <input class="form-input" @bind="_form.Excerpt" placeholder="Short summary" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Content (HTML)</label>
+                <textarea class="form-input" @bind="_form.Content" rows="10" placeholder="<p>Write your post here...</p>"></textarea>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" id="pub" @bind="_form.Published" />
+                <label for="pub" class="form-label" style="margin:0;cursor:pointer">Published</label>
+            </div>
+            <div style="display:flex;gap:12px">
+                <button class="btn-primary" @onclick="Save" disabled="@_saving">@(_saving ? "Saving..." : "Save")</button>
+                <button class="btn-outline" @onclick="() => _showForm = false">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Published</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var post in _posts)
+                {
+                    <tr>
+                        <td><strong>@post.Title</strong></td>
+                        <td>@(post.Category ?? "-")</td>
+                        <td><span class="status-badge @(post.PublishedAt.HasValue ? "published" : "draft")">@(post.PublishedAt.HasValue ? "Published" : "Draft")</span></td>
+                        <td>@(post.PublishedAt?.ToString("d MMM yyyy") ?? "-")</td>
+                        <td>
+                            <button class="btn-outline btn-sm" @onclick="() => ShowFormById(post.Id)">Edit</button>
+                            <button class="btn-danger btn-sm" @onclick="() => Delete(post.Id)" style="margin-left:8px">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</AdminLayout>
+
+@code {
+    private List<BlogPostDto> _posts = [];
+    private bool _loading = true;
+    private bool _showForm;
+    private bool _saving;
+    private Guid? _editId;
+    private string _message = "";
+
+    private BlogFormModel _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        _posts = await BlogService.GetAllAdminAsync();
+        _loading = false;
+    }
+
+    private void ShowForm(BlogPostDto? post)
+    {
+        _editId = post?.Id;
+        _form = post is null
+            ? new BlogFormModel()
+            : new BlogFormModel
+            {
+                Title    = post.Title,
+                Slug     = post.Slug,
+                Category = post.Category,
+                ImageUrl = post.ImageUrl,
+                Excerpt  = post.Excerpt,
+                Published = post.PublishedAt.HasValue
+            };
+        _showForm = true;
+        _message = "";
+    }
+
+    private async Task ShowFormById(Guid id)
+    {
+        var detail = await BlogService.GetByIdAsync(id);
+        if (detail is null) return;
+        _editId = id;
+        _form = new BlogFormModel
+        {
+            Title     = detail.Title,
+            Slug      = detail.Slug,
+            Category  = detail.Category,
+            ImageUrl  = detail.ImageUrl,
+            Excerpt   = detail.Excerpt,
+            Content   = detail.Content,
+            Published = detail.PublishedAt.HasValue
+        };
+        _showForm = true;
+        _message = "";
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        if (_editId.HasValue)
+        {
+            await BlogService.UpdateAsync(_editId.Value, new UpdateBlogPostRequest(
+                _form.Title, _form.Content, _form.Excerpt, _form.ImageUrl, _form.Category, _form.Published));
+            _message = "Post updated.";
+        }
+        else
+        {
+            await BlogService.CreateAsync(new CreateBlogPostRequest(
+                _form.Title!, _form.Slug!, _form.Content, _form.Excerpt, _form.ImageUrl, _form.Category));
+            _message = "Post created.";
+        }
+        _showForm = false;
+        _saving = false;
+        await Load();
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await BlogService.DeleteAsync(id);
+        _message = "Post deleted.";
+        await Load();
+    }
+
+    private class BlogFormModel
+    {
+        public string? Title { get; set; }
+        public string? Slug { get; set; }
+        public string? Category { get; set; }
+        public string? ImageUrl { get; set; }
+        public string? Excerpt { get; set; }
+        public string? Content { get; set; }
+        public bool Published { get; set; }
+    }
+}

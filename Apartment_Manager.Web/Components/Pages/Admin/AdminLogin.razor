@@ -1,0 +1,54 @@
+@page "/admin/login"
+@using Apartment_Manager.Web.Services
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Admin Login – Limnos Apartments</PageTitle>
+
+<div class="container">
+    <div class="review-form-card">
+        <h2 style="margin-bottom:4px">Admin Login</h2>
+        <p style="color:var(--color-muted);margin-bottom:28px">Enter the admin password to continue.</p>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-error">@_error</div>
+        }
+
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-input" type="password" @bind="_password" @onkeydown="OnKeyDown" placeholder="Admin password" />
+        </div>
+
+        <button class="btn-primary" style="width:100%" @onclick="Login" disabled="@_loading">
+            @(_loading ? "Signing in..." : "Sign In")
+        </button>
+    </div>
+</div>
+
+@code {
+    private string _password = "";
+    private string _error = "";
+    private bool _loading;
+
+    private async Task Login()
+    {
+        _loading = true;
+        _error = "";
+        var ok = await Auth.LoginAsync(_password);
+        if (ok)
+            Nav.NavigateTo("/admin");
+        else
+        {
+            _error = "Incorrect password.";
+            _password = "";
+        }
+        _loading = false;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Login();
+    }
+}

@@ -1,0 +1,60 @@
+@page "/apartments"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@rendermode InteractiveServer
+
+<PageTitle>Apartments – Limnos</PageTitle>
+
+<div class="container section">
+    <h1 class="section-title">All Apartments</h1>
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else if (_filtered.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No apartments found</h3>
+            <p>@(_query != "" ? "Try a different search." : "Check back soon!")</p>
+        </div>
+    }
+    else
+    {
+        <div class="apartments-grid">
+            @foreach (var apt in _filtered)
+            {
+                <ApartmentCard Apartment="apt" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+
+    private List<ApartmentDto> _all = [];
+    private List<ApartmentDto> _filtered = [];
+    private bool _loading = true;
+    private string _query => Query ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await ApartmentService.GetAllAsync();
+        _loading = false;
+        ApplyFilter();
+    }
+
+    protected override void OnParametersSet() => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_query)
+            ? _all
+            : _all.Where(a =>
+                a.Title.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
+                (a.Location?.Contains(_query, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+    }
+}

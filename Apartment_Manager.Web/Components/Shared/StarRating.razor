@@ -1,0 +1,10 @@
+@for (int i = 1; i <= 5; i++)
+{
+    <span class="@CssClass">@(i <= Rating ? "★" : "☆")</span>
+}
+
+@code {
+    [Parameter] public int Rating { get; set; }
+    [Parameter] public bool Small { get; set; }
+    private string CssClass => Small ? "stars-sm" : "stars";
+}

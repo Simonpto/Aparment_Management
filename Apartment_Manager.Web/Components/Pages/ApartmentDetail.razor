@@ -1,0 +1,161 @@
+@page "/apartments/{Id:guid}"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@rendermode InteractiveServer
+
+<PageTitle>@(_apt?.Title ?? "Apartment") – Limnos</PageTitle>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_apt is null)
+{
+    <div class="container section empty-state">
+        <h3>Apartment not found</h3>
+        <a class="btn-outline" href="/apartments">Back to listings</a>
+    </div>
+}
+else
+{
+    <div class="container" style="padding-top:32px">
+
+        <!-- Gallery -->
+        @if (_apt.Images.Count > 0)
+        {
+            <div class="detail-gallery">
+                <div class="detail-gallery-main">
+                    <img src="@_apt.Images.OrderBy(i => i.DisplayOrder).First().ImageUrl" alt="@_apt.Title" />
+                </div>
+                @foreach (var img in _apt.Images.OrderBy(i => i.DisplayOrder).Skip(1).Take(2))
+                {
+                    <div class="gallery-thumb"><img src="@img.ImageUrl" alt="@_apt.Title" /></div>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="height:300px;background:linear-gradient(135deg,#e0e7ff,#c7d2fe);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:5rem;margin-bottom:32px">🏠</div>
+        }
+
+        <div class="detail-layout">
+            <!-- Left column -->
+            <div>
+                <h1 class="detail-title">@_apt.Title</h1>
+                <div class="detail-meta">
+                    📍 @_apt.Location
+                    @if (_apt.MaxGuests.HasValue) { <span> &middot; 👤 Up to @_apt.MaxGuests guests</span> }
+                    @if (_apt.Bedrooms.HasValue)  { <span> &middot; 🛏 @_apt.Bedrooms bedroom(s)</span> }
+                </div>
+
+                @if (!string.IsNullOrEmpty(_apt.Description))
+                {
+                    <p class="detail-desc">@_apt.Description</p>
+                }
+
+                <hr class="detail-divider" />
+
+                <!-- Amenities -->
+                @if (_apt.Amenities.Count > 0)
+                {
+                    <h3>Amenities</h3>
+                    <div class="amenities-grid">
+                        @foreach (var am in _apt.Amenities)
+                        {
+                            <div class="amenity-badge">✓ @am</div>
+                        }
+                    </div>
+                    <hr class="detail-divider" />
+                }
+
+                <!-- Availability -->
+                <h3>Availability</h3>
+                <AvailabilityCalendar Availability="_availability" />
+
+                <hr class="detail-divider" />
+
+                <!-- Reviews -->
+                <h3>Reviews @(_reviews.Count > 0 ? $"({_reviews.Count})" : "")</h3>
+                @if (_reviews.Count == 0)
+                {
+                    <p style="color:var(--color-muted)">No reviews yet.</p>
+                }
+                else
+                {
+                    @foreach (var r in _reviews)
+                    {
+                        <div class="review-card">
+                            <div class="review-header">
+                                <span class="review-author">@(r.GuestName ?? "Guest")</span>
+                                <span class="review-date">@r.CreatedAt.ToString("MMM yyyy")</span>
+                            </div>
+                            <StarRating Rating="r.Rating" Small="true" />
+                            @if (!string.IsNullOrEmpty(r.Text))
+                            {
+                                <p class="review-text" style="margin-top:8px">@r.Text</p>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Booking sidebar -->
+            <div>
+                <div class="booking-card">
+                    <div class="booking-price">
+                        @if (_apt.BasePricePerNight.HasValue)
+                        {
+                            <span>€@_apt.BasePricePerNight.Value.ToString("F0")</span>
+                            <span> / night</span>
+                        }
+                        else
+                        {
+                            <span>Contact for pricing</span>
+                        }
+                    </div>
+                    @if (_reviews.Count > 0)
+                    {
+                        <p style="margin-bottom:16px">
+                            <StarRating Rating="(int)Math.Round(_reviews.Average(r => r.Rating))" Small="true" />
+                            <span style="color:var(--color-muted);font-size:.85rem"> @_reviews.Count review(s)</span>
+                        </p>
+                    }
+                    <p style="color:var(--color-muted);font-size:.875rem;margin-bottom:16px">
+                        To book, please contact us directly via email or phone.
+                    </p>
+                    <a href="mailto:info@limnosapartments.gr" class="btn-primary" style="width:100%;text-align:center;display:block">Contact to Book</a>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding:32px 0">
+            <a href="/apartments" style="color:var(--color-muted);font-size:.9rem">← Back to all apartments</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ApartmentDto? _apt;
+    private List<AvailabilityDto> _availability = [];
+    private List<ReviewDto> _reviews = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tasks = new Task[]
+        {
+            LoadApartment(),
+            LoadAvailability(),
+            LoadReviews()
+        };
+        await Task.WhenAll(tasks);
+        _loading = false;
+    }
+
+    private async Task LoadApartment()    => _apt          = await ApartmentService.GetByIdAsync(Id);
+    private async Task LoadAvailability() => _availability = await ApartmentService.GetAvailabilityAsync(Id);
+    private async Task LoadReviews()      => _reviews      = await ApartmentService.GetReviewsAsync(Id);
+}

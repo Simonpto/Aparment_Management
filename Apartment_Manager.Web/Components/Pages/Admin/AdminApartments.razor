@@ -1,0 +1,174 @@
+@page "/admin/apartments"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Manage Apartments – Admin</PageTitle>
+
+<AdminLayout>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 class="admin-section-title" style="margin:0">Apartments</h2>
+        <button class="btn-primary btn-sm" @onclick="() => ShowForm(null)">+ Add Apartment</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    @if (_showForm)
+    {
+        <div style="background:var(--color-bg-soft);border-radius:12px;padding:28px;margin-bottom:28px;border:1px solid var(--color-border)">
+            <h3 style="margin-bottom:20px">@(_editId.HasValue ? "Edit" : "New") Apartment</h3>
+            <div class="form-group">
+                <label class="form-label">Title *</label>
+                <input class="form-input" @bind="_form.Title" placeholder="e.g. Sea View Studio" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Location</label>
+                <input class="form-input" @bind="_form.Location" placeholder="e.g. Myrina, Limnos" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-input" @bind="_form.Description" rows="4"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+                <div class="form-group">
+                    <label class="form-label">Price / night (€)</label>
+                    <input class="form-input" type="number" @bind="_form.BasePricePerNight" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Bedrooms</label>
+                    <input class="form-input" type="number" @bind="_form.Bedrooms" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Guests</label>
+                    <input class="form-input" type="number" @bind="_form.MaxGuests" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Amenities (comma-separated)</label>
+                <input class="form-input" @bind="_amenitiesRaw" placeholder="WiFi, Pool, Air conditioning" />
+            </div>
+            <div style="display:flex;gap:12px">
+                <button class="btn-primary" @onclick="Save" disabled="@_saving">@(_saving ? "Saving..." : "Save")</button>
+                <button class="btn-outline" @onclick="() => _showForm = false">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Location</th>
+                    <th>Price/night</th>
+                    <th>Beds</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var apt in _apartments)
+                {
+                    <tr>
+                        <td><strong>@apt.Title</strong></td>
+                        <td>@apt.Location</td>
+                        <td>@(apt.BasePricePerNight.HasValue ? $"€{apt.BasePricePerNight:F0}" : "-")</td>
+                        <td>@(apt.Bedrooms?.ToString() ?? "-")</td>
+                        <td>
+                            <button class="btn-outline btn-sm" @onclick="() => ShowForm(apt)">Edit</button>
+                            <button class="btn-danger btn-sm" @onclick="() => Delete(apt.Id)" style="margin-left:8px">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</AdminLayout>
+
+@code {
+    private List<ApartmentDto> _apartments = [];
+    private bool _loading = true;
+    private bool _showForm;
+    private bool _saving;
+    private Guid? _editId;
+    private string _message = "";
+    private string _amenitiesRaw = "";
+
+    private ApartmentFormModel _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        _apartments = await ApartmentService.GetAllAsync();
+        _loading = false;
+    }
+
+    private void ShowForm(ApartmentDto? apt)
+    {
+        _editId = apt?.Id;
+        _form = apt is null
+            ? new ApartmentFormModel()
+            : new ApartmentFormModel
+            {
+                Title              = apt.Title,
+                Location           = apt.Location,
+                Description        = apt.Description,
+                BasePricePerNight  = apt.BasePricePerNight,
+                Bedrooms           = apt.Bedrooms,
+                MaxGuests          = apt.MaxGuests
+            };
+        _amenitiesRaw = apt is null ? "" : string.Join(", ", apt.Amenities);
+        _showForm = true;
+        _message = "";
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        var amenities = _amenitiesRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        if (_editId.HasValue)
+        {
+            await ApartmentService.UpdateAsync(_editId.Value, new UpdateApartmentRequest(
+                _form.Title, _form.Description, _form.Location, amenities, _form.MaxGuests, _form.Bedrooms, _form.BasePricePerNight));
+            _message = "Apartment updated.";
+        }
+        else
+        {
+            await ApartmentService.CreateAsync(new CreateApartmentRequest(
+                _form.Title!, _form.Description, _form.Location, amenities, _form.MaxGuests, _form.Bedrooms, _form.BasePricePerNight));
+            _message = "Apartment created.";
+        }
+        _showForm = false;
+        _saving = false;
+        await Load();
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await ApartmentService.DeleteAsync(id);
+        _message = "Apartment deleted.";
+        await Load();
+    }
+
+    private class ApartmentFormModel
+    {
+        public string? Title { get; set; }
+        public string? Location { get; set; }
+        public string? Description { get; set; }
+        public decimal? BasePricePerNight { get; set; }
+        public short? Bedrooms { get; set; }
+        public short? MaxGuests { get; set; }
+    }
+}

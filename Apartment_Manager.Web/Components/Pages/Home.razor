@@ -1,0 +1,79 @@
+@page "/"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Limnos Apartments – Your Home in Greece</PageTitle>
+
+<section class="hero">
+    <h1>Discover Limnos</h1>
+    <p>Find your perfect vacation apartment on the magical island of Limnos, Greece.</p>
+    <div class="search-bar">
+        <input @bind="_query" @bind:event="oninput" placeholder="Search apartments..." />
+        <button class="btn-search" @onclick="Search">Search</button>
+    </div>
+</section>
+
+<div class="container">
+    <section class="section">
+        <h2 class="section-title">Featured Apartments</h2>
+        @if (_loading)
+        {
+            <LoadingSpinner />
+        }
+        else if (_apartments.Count == 0)
+        {
+            <div class="empty-state">
+                <h3>No apartments listed yet</h3>
+                <p>Check back soon!</p>
+            </div>
+        }
+        else
+        {
+            <div class="apartments-grid">
+                @foreach (var apt in _apartments.Take(6))
+                {
+                    <ApartmentCard Apartment="apt" />
+                }
+            </div>
+            @if (_apartments.Count > 6)
+            {
+                <div style="text-align:center;margin-top:32px">
+                    <a class="btn-outline" href="/apartments">View all apartments</a>
+                </div>
+            }
+        }
+    </section>
+
+    <section class="section" style="background:var(--color-bg-soft);border-radius:16px;padding:48px 40px;margin-bottom:48px;text-align:center">
+        <h2>Why Limnos?</h2>
+        <p style="color:var(--color-muted);max-width:600px;margin:16px auto 0;line-height:1.7">
+            Limnos is one of Greece's most unspoiled islands — pristine beaches, authentic cuisine,
+            and a relaxed pace of life that feels worlds away from the tourist crowds.
+        </p>
+        <a class="btn-primary" href="/blog" style="margin-top:24px;display:inline-block">Read the Limnos Guide</a>
+    </section>
+</div>
+
+@code {
+    private List<ApartmentDto> _apartments = [];
+    private bool _loading = true;
+    private string _query = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _apartments = await ApartmentService.GetAllAsync();
+        _loading = false;
+    }
+
+    private void Search()
+    {
+        var q = _query.Trim();
+        if (!string.IsNullOrEmpty(q))
+            Nav.NavigateTo($"/apartments?q={Uri.EscapeDataString(q)}");
+        else
+            Nav.NavigateTo("/apartments");
+    }
+}

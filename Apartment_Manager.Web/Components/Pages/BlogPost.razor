@@ -1,0 +1,57 @@
+@page "/blog/{Slug}"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IBlogApiService BlogService
+@rendermode InteractiveServer
+
+<PageTitle>@(_post?.Title ?? "Blog") – Limnos</PageTitle>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_post is null)
+{
+    <div class="container section empty-state">
+        <h3>Post not found</h3>
+        <a class="btn-outline" href="/blog">Back to Blog</a>
+    </div>
+}
+else
+{
+    <div class="container" style="padding-top:40px;padding-bottom:60px">
+        <div style="max-width:760px;margin:0 auto">
+            @if (!string.IsNullOrEmpty(_post.Category))
+            {
+                <div class="blog-card-category" style="margin-bottom:12px">@_post.Category</div>
+            }
+            <h1 style="font-size:clamp(1.6rem,4vw,2.5rem);margin-bottom:12px">@_post.Title</h1>
+            @if (_post.PublishedAt.HasValue)
+            {
+                <p style="color:var(--color-muted);font-size:.9rem;margin-bottom:28px">@_post.PublishedAt.Value.ToString("MMMM d, yyyy")</p>
+            }
+            @if (!string.IsNullOrEmpty(_post.ImageUrl))
+            {
+                <img class="blog-post-hero" src="@_post.ImageUrl" alt="@_post.Title" />
+            }
+            <div class="blog-post-content">
+                @((MarkupString)(_post.Content ?? ""))
+            </div>
+            <div style="margin-top:48px">
+                <a href="/blog" style="color:var(--color-muted);font-size:.9rem">← Back to Blog</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    private BlogPostDetailDto? _post;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _post = await BlogService.GetBySlugAsync(Slug);
+        _loading = false;
+    }
+}

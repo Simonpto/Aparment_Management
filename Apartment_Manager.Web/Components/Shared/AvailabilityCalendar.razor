@@ -1,0 +1,54 @@
+@using Apartment_Manager.Shared.DTOs
+
+<div>
+    <div class="calendar-header">
+        <button class="calendar-nav" @onclick="PrevMonth">&#8249;</button>
+        <span>@CurrentMonth.ToString("MMMM yyyy")</span>
+        <button class="calendar-nav" @onclick="NextMonth">&#8250;</button>
+    </div>
+
+    <div class="calendar-grid">
+        @foreach (var name in DayNames)
+        {
+            <div class="calendar-day-name">@name</div>
+        }
+        @foreach (var day in CalendarDays)
+        {
+            <div class="calendar-day @DayCss(day)">
+                @(day == DateOnly.MinValue ? "" : day.Day.ToString())
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<AvailabilityDto> Availability { get; set; } = [];
+
+    private DateOnly CurrentMonth = DateOnly.FromDateTime(DateTime.Today);
+    private static readonly string[] DayNames = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var first = new DateOnly(CurrentMonth.Year, CurrentMonth.Month, 1);
+            var offset = ((int)first.DayOfWeek + 6) % 7;
+            for (int i = 0; i < offset; i++) yield return DateOnly.MinValue;
+            var days = DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month);
+            for (int d = 1; d <= days; d++) yield return new DateOnly(CurrentMonth.Year, CurrentMonth.Month, d);
+        }
+    }
+
+    private string DayCss(DateOnly day)
+    {
+        if (day == DateOnly.MinValue) return "other-month";
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var av = Availability.FirstOrDefault(a => a.Date == day);
+        var css = av?.IsAvailable == false ? "unavailable" : "available";
+        if (day == today) css += " today";
+        return css;
+    }
+
+    private void PrevMonth() => CurrentMonth = CurrentMonth.AddMonths(-1);
+    private void NextMonth() => CurrentMonth = CurrentMonth.AddMonths(1);
+}

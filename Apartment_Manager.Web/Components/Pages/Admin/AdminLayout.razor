@@ -1,0 +1,53 @@
+@using Apartment_Manager.Web.Services
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+@if (!_checked)
+{
+    <LoadingSpinner />
+}
+else if (_authed)
+{
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div style="padding:0 20px 20px;font-weight:700;font-size:1.1rem;color:var(--color-primary)">⚙ Admin</div>
+            <NavLink href="/admin" Match="NavLinkMatch.All" ActiveClass="active-admin">📊 Dashboard</NavLink>
+            <NavLink href="/admin/apartments" ActiveClass="active-admin">🏠 Apartments</NavLink>
+            <NavLink href="/admin/blog" ActiveClass="active-admin">📝 Blog</NavLink>
+            <NavLink href="/admin/reviews" ActiveClass="active-admin">⭐ Reviews</NavLink>
+            <NavLink href="/admin/tokens" ActiveClass="active-admin">🔑 Review Tokens</NavLink>
+            <div style="margin-top:auto;padding:20px">
+                <button class="btn-outline btn-sm" @onclick="Logout">Sign out</button>
+            </div>
+        </aside>
+        <div class="admin-content">
+            @ChildContent
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _checked;
+    private bool _authed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _authed = await Auth.IsAuthenticatedAsync();
+        _checked = true;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_checked && !_authed)
+            Nav.NavigateTo("/admin/login");
+    }
+
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/admin/login");
+    }
+}

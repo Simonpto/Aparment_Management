@@ -1,0 +1,115 @@
+@page "/review/{Token}"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IReviewApiService ReviewService
+@rendermode InteractiveServer
+
+<PageTitle>Leave a Review – Limnos Apartments</PageTitle>
+
+<div class="container">
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else if (!_tokenValid)
+    {
+        <div class="review-form-card" style="text-align:center">
+            <div style="font-size:3rem;margin-bottom:16px">❌</div>
+            <h2>Invalid or Expired Link</h2>
+            <p style="color:var(--color-muted)">This review link is no longer valid. It may have already been used or expired.</p>
+        </div>
+    }
+    else if (_submitted)
+    {
+        <div class="review-form-card" style="text-align:center">
+            <div style="font-size:3rem;margin-bottom:16px">🎉</div>
+            <h2>Thank you!</h2>
+            <p style="color:var(--color-muted)">Your review has been submitted and will appear after moderation.</p>
+            <a class="btn-outline" href="/" style="margin-top:20px;display:inline-block">Back to Home</a>
+        </div>
+    }
+    else
+    {
+        <div class="review-form-card">
+            <h2 style="margin-bottom:4px">Leave a Review</h2>
+            <p style="color:var(--color-muted);margin-bottom:28px">Share your experience staying at our apartment.</p>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-error">@_error</div>
+            }
+
+            <div class="form-group">
+                <label class="form-label">Your Name</label>
+                <input class="form-input" @bind="_guestName" placeholder="e.g. Maria S." />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Rating</label>
+                <div class="star-picker">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        var star = i;
+                        <button class="star-btn @(_rating >= star ? "active" : "")" type="button" @onclick="() => _rating = star">★</button>
+                    }
+                </div>
+                @if (_showValidation && _rating == 0)
+                {
+                    <div class="form-error">Please select a rating.</div>
+                }
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Your Review</label>
+                <textarea class="form-input" @bind="_text" placeholder="Tell us about your stay..." rows="5"></textarea>
+            </div>
+
+            <button class="btn-primary" style="width:100%" @onclick="Submit" disabled="@_submitting">
+                @(_submitting ? "Submitting..." : "Submit Review")
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _tokenValid;
+    private bool _submitted;
+    private bool _submitting;
+    private bool _showValidation;
+    private string _guestName = "";
+    private int _rating;
+    private string _text = "";
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await ReviewService.ValidateTokenAsync(Token);
+        _tokenValid = result.IsValid;
+        _loading = false;
+    }
+
+    private async Task Submit()
+    {
+        _showValidation = true;
+        if (_rating == 0) return;
+
+        _submitting = true;
+        _error = "";
+        try
+        {
+            await ReviewService.SubmitReviewAsync(new CreateReviewRequest(Token, (short)_rating, _text, _guestName));
+            _submitted = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

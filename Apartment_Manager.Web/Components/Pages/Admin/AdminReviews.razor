@@ -1,0 +1,90 @@
+@page "/admin/reviews"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IReviewApiService ReviewService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Moderate Reviews – Admin</PageTitle>
+
+<AdminLayout>
+    <h2 class="admin-section-title">Reviews</h2>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else if (_reviews.Count == 0)
+    {
+        <div class="empty-state"><h3>No reviews yet</h3></div>
+    }
+    else
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Guest</th>
+                    <th>Rating</th>
+                    <th>Review</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _reviews)
+                {
+                    <tr>
+                        <td>@(r.GuestName ?? "Anonymous")</td>
+                        <td><StarRating Rating="r.Rating" Small="true" /></td>
+                        <td style="max-width:300px;white-space:normal">@r.Text</td>
+                        <td><span class="status-badge @(r.Approved ? "approved" : "pending")">@(r.Approved ? "Approved" : "Pending")</span></td>
+                        <td>@r.CreatedAt.ToString("d MMM yyyy")</td>
+                        <td>
+                            @if (!r.Approved)
+                            {
+                                <button class="btn-primary btn-sm" @onclick="() => Approve(r.Id)">Approve</button>
+                            }
+                            <button class="btn-danger btn-sm" @onclick="() => Delete(r.Id)" style="margin-left:8px">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</AdminLayout>
+
+@code {
+    private List<AdminReviewDto> _reviews = [];
+    private bool _loading = true;
+    private string _message = "";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        _reviews = await ReviewService.GetAllAdminAsync();
+        _loading = false;
+    }
+
+    private async Task Approve(Guid id)
+    {
+        await ReviewService.ApproveAsync(id);
+        _message = "Review approved.";
+        await Load();
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await ReviewService.DeleteReviewAsync(id);
+        _message = "Review deleted.";
+        await Load();
+    }
+}

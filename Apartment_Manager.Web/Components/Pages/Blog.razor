@@ -1,0 +1,86 @@
+@page "/blog"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IBlogApiService BlogService
+@rendermode InteractiveServer
+
+<PageTitle>Blog – Limnos Guide</PageTitle>
+
+<div class="container section">
+    <h1 class="section-title">Limnos Guide</h1>
+
+    <div class="category-filters">
+        <button class="filter-chip @(_activeCategory == null ? "active" : "")" @onclick='() => SetCategory(null)'>All</button>
+        @foreach (var cat in _categories)
+        {
+            <button class="filter-chip @(_activeCategory == cat ? "active" : "")" @onclick="() => SetCategory(cat)">@cat</button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else if (_filtered.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No posts yet</h3>
+            <p>@(_activeCategory != null ? "No posts in this category." : "Check back soon!")</p>
+        </div>
+    }
+    else
+    {
+        <div class="blog-grid">
+            @foreach (var post in _filtered)
+            {
+                <a class="blog-card" href="/blog/@post.Slug">
+                    @if (!string.IsNullOrEmpty(post.ImageUrl))
+                    {
+                        <img class="blog-card-img" src="@post.ImageUrl" alt="@post.Title" />
+                    }
+                    else
+                    {
+                        <div class="blog-card-img-placeholder">📝</div>
+                    }
+                    <div class="blog-card-body">
+                        @if (!string.IsNullOrEmpty(post.Category))
+                        {
+                            <div class="blog-card-category">@post.Category</div>
+                        }
+                        <div class="blog-card-title">@post.Title</div>
+                        @if (!string.IsNullOrEmpty(post.Excerpt))
+                        {
+                            <div class="blog-card-excerpt">@post.Excerpt</div>
+                        }
+                        @if (post.PublishedAt.HasValue)
+                        {
+                            <div class="blog-card-date">@post.PublishedAt.Value.ToString("MMMM d, yyyy")</div>
+                        }
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<BlogPostDto> _all = [];
+    private List<BlogPostDto> _filtered = [];
+    private List<string> _categories = [];
+    private string? _activeCategory;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await BlogService.GetAllAsync();
+        _categories = _all.Where(p => p.Category != null).Select(p => p.Category!).Distinct().OrderBy(c => c).ToList();
+        _filtered = _all;
+        _loading = false;
+    }
+
+    private void SetCategory(string? cat)
+    {
+        _activeCategory = cat;
+        _filtered = cat is null ? _all : _all.Where(p => p.Category == cat).ToList();
+    }
+}

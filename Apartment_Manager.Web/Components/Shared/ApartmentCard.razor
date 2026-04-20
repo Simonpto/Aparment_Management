@@ -1,0 +1,37 @@
+@using Apartment_Manager.Shared.DTOs
+
+<a class="apartment-card" href="/apartments/@Apartment.Id">
+    @if (Apartment.Images.Count > 0)
+    {
+        <img class="apartment-card-img" src="@Apartment.Images.First(i => i.IsPrimary).ImageUrl" alt="@Apartment.Title" />
+    }
+    else
+    {
+        <div class="apartment-card-img-placeholder">🏠</div>
+    }
+    <div class="apartment-card-body">
+        <div class="apartment-card-title">@Apartment.Title</div>
+        <div class="apartment-card-location">@Apartment.Location</div>
+        <div class="apartment-card-price">
+            @if (Apartment.BasePricePerNight.HasValue)
+            {
+                <span>€@Apartment.BasePricePerNight.Value.ToString("F0")</span>
+                <span> / night</span>
+            }
+        </div>
+        <div class="apartment-card-meta">
+            @if (Apartment.Bedrooms.HasValue)
+            {
+                <span>🛏 @Apartment.Bedrooms bed</span>
+            }
+            @if (Apartment.MaxGuests.HasValue)
+            {
+                <span>👤 @Apartment.MaxGuests guests</span>
+            }
+        </div>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public ApartmentDto Apartment { get; set; } = default!;
+}

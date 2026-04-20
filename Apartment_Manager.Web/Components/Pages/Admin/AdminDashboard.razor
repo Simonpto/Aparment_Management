@@ -1,0 +1,54 @@
+@page "/admin"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@inject IBlogApiService BlogService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Admin Dashboard – Limnos</PageTitle>
+
+<AdminLayout>
+    <h2 class="admin-section-title">Dashboard</h2>
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px;margin-bottom:40px">
+            <div style="background:var(--color-bg-soft);border-radius:12px;padding:24px">
+                <div style="font-size:2rem;font-weight:700">@_aptCount</div>
+                <div style="color:var(--color-muted);margin-top:4px">Apartments</div>
+            </div>
+            <div style="background:var(--color-bg-soft);border-radius:12px;padding:24px">
+                <div style="font-size:2rem;font-weight:700">@_blogCount</div>
+                <div style="color:var(--color-muted);margin-top:4px">Blog Posts</div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px">
+            <a class="btn-primary" href="/admin/apartments">Manage Apartments</a>
+            <a class="btn-outline" href="/admin/blog">Manage Blog</a>
+            <a class="btn-outline" href="/admin/reviews">Moderate Reviews</a>
+        </div>
+    }
+</AdminLayout>
+
+@code {
+    private int _aptCount;
+    private int _blogCount;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        var apts  = await ApartmentService.GetAllAsync();
+        var posts = await BlogService.GetAllAdminAsync();
+        _aptCount  = apts.Count;
+        _blogCount = posts.Count;
+        _loading = false;
+    }
+}

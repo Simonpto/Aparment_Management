@@ -1,0 +1,67 @@
+@page "/admin/tokens"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@inject IReviewApiService ReviewService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Review Tokens – Admin</PageTitle>
+
+<AdminLayout>
+    <h2 class="admin-section-title">Generate Review Links</h2>
+    <p style="color:var(--color-muted);margin-bottom:28px">Send these secure links to guests after their stay. Each link can only be used once.</p>
+
+    @if (!string.IsNullOrEmpty(_generatedUrl))
+    {
+        <div class="alert alert-success">
+            <strong>Link generated!</strong><br/>
+            <code style="word-break:break-all">@_generatedUrl</code>
+        </div>
+    }
+
+    <div style="background:var(--color-bg-soft);border-radius:12px;padding:24px;max-width:480px;border:1px solid var(--color-border)">
+        <div class="form-group">
+            <label class="form-label">Apartment</label>
+            <select class="form-input" @bind="_selectedApartmentId">
+                <option value="">-- Select apartment --</option>
+                @foreach (var apt in _apartments)
+                {
+                    <option value="@apt.Id">@apt.Title</option>
+                }
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Expires in (days)</label>
+            <input class="form-input" type="number" @bind="_expiryDays" min="1" max="90" />
+        </div>
+        <button class="btn-primary" @onclick="Generate" disabled="@(_generating || string.IsNullOrEmpty(_selectedApartmentId))">
+            @(_generating ? "Generating..." : "Generate Link")
+        </button>
+    </div>
+</AdminLayout>
+
+@code {
+    private List<ApartmentDto> _apartments = [];
+    private string _selectedApartmentId = "";
+    private int _expiryDays = 7;
+    private string _generatedUrl = "";
+    private bool _generating;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        _apartments = await ApartmentService.GetAllAsync();
+    }
+
+    private async Task Generate()
+    {
+        if (!Guid.TryParse(_selectedApartmentId, out var aptId)) return;
+        _generating = true;
+        _generatedUrl = "";
+        var token = await ReviewService.GenerateTokenAsync(new GenerateTokenRequest(aptId, _expiryDays));
+        _generatedUrl = $"{Nav.BaseUri}review/{token}";
+        _generating = false;
+    }
+}
