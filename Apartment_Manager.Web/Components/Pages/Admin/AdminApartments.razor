@@ -4,6 +4,7 @@
 @inject IApartmentApiService ApartmentService
 @inject IAdminAuthService Auth
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Manage Apartments – Admin</PageTitle>
@@ -53,6 +54,38 @@
                 <label class="form-label">Amenities (comma-separated)</label>
                 <input class="form-input" @bind="_amenitiesRaw" placeholder="WiFi, Pool, Air conditioning" />
             </div>
+
+            @if (_editId.HasValue)
+            {
+                <div class="form-group">
+                    <label class="form-label">Images</label>
+                    @if (_editImages.Any())
+                    {
+                        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+                            @foreach (var img in _editImages)
+                            {
+                                <div style="position:relative;width:100px;height:80px">
+                                    <img src="@img.ImageUrl" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--color-border)" />
+                                    <button style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center"
+                                            @onclick="() => DeleteImage(img)" disabled="@_uploadingImage">×</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <InputFile OnChange="UploadImage" accept="image/jpeg,image/png,image/webp" disabled="@_uploadingImage" />
+                    @if (_uploadingImage)
+                    {
+                        <div style="font-size:13px;color:var(--color-text-muted);margin-top:6px">Uploading…</div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div style="font-size:13px;color:var(--color-text-muted);margin-bottom:16px">
+                    Save the apartment first, then re-open it to upload images.
+                </div>
+            }
+
             <div style="display:flex;gap:12px">
                 <button class="btn-primary" @onclick="Save" disabled="@_saving">@(_saving ? "Saving..." : "Save")</button>
                 <button class="btn-outline" @onclick="() => _showForm = false">Cancel</button>
@@ -86,6 +119,7 @@
                         <td>@(apt.Bedrooms?.ToString() ?? "-")</td>
                         <td>
                             <button class="btn-outline btn-sm" @onclick="() => ShowForm(apt)">Edit</button>
+                            <button class="btn-outline btn-sm" @onclick='() => Nav.NavigateTo($"/admin/apartments/{apt.Id}/availability")' style="margin-left:8px">Availability</button>
                             <button class="btn-danger btn-sm" @onclick="() => Delete(apt.Id)" style="margin-left:8px">Delete</button>
                         </td>
                     </tr>
@@ -100,9 +134,11 @@
     private bool _loading = true;
     private bool _showForm;
     private bool _saving;
+    private bool _uploadingImage;
     private Guid? _editId;
     private string _message = "";
     private string _amenitiesRaw = "";
+    private List<ApartmentImageDto> _editImages = [];
 
     private ApartmentFormModel _form = new();
 
@@ -130,8 +166,35 @@
                 MaxGuests          = apt.MaxGuests
             };
         _amenitiesRaw = apt is null ? "" : string.Join(", ", apt.Amenities);
+        _editImages = apt?.Images.ToList() ?? [];
         _showForm = true;
         _message = "";
+    }
+
+    private async Task UploadImage(InputFileChangeEventArgs e)
+    {
+        if (_editId is null || e.FileCount == 0) return;
+        _uploadingImage = true;
+        try
+        {
+            var file = e.File;
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var image = await ApartmentService.UploadImageAsync(_editId.Value, stream, file.Name, file.ContentType);
+            _editImages.Add(image);
+            _message = "Image uploaded.";
+        }
+        finally
+        {
+            _uploadingImage = false;
+        }
+    }
+
+    private async Task DeleteImage(ApartmentImageDto img)
+    {
+        if (_editId is null) return;
+        await ApartmentService.DeleteImageAsync(_editId.Value, img.Id);
+        _editImages.Remove(img);
+        _message = "Image deleted.";
     }
 
     private async Task Save()

@@ -35,4 +35,27 @@ public class ApartmentApiService(HttpClient http) : IApartmentApiService
         var response = await http.DeleteAsync($"/api/apartments/{id}");
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task UpsertAvailabilityAsync(Guid id, UpdateAvailabilityRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"/api/apartments/{id}/availability", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<ApartmentImageDto> UploadImageAsync(Guid id, Stream imageStream, string fileName, string contentType)
+    {
+        using var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(imageStream);
+        streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "file", fileName);
+        var response = await http.PostAsync($"/api/apartments/{id}/images", content);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ApartmentImageDto>())!;
+    }
+
+    public async Task DeleteImageAsync(Guid apartmentId, Guid imageId)
+    {
+        var response = await http.DeleteAsync($"/api/apartments/{apartmentId}/images/{imageId}");
+        response.EnsureSuccessStatusCode();
+    }
 }

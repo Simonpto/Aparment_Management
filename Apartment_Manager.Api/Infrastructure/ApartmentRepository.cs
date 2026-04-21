@@ -126,6 +126,36 @@ public class ApartmentRepository(DatabaseConnectionFactory db)
             new { apartmentId, date = r.Date, isAvailable = r.IsAvailable, priceOverride = r.PriceOverride });
     }
 
+    public async Task<int> GetImageCountAsync(Guid apartmentId)
+    {
+        using var conn = db.Create();
+        await conn.OpenAsync();
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM apartment_images WHERE apartment_id = @apartmentId", new { apartmentId });
+    }
+
+    public async Task<ApartmentImageDto> AddImageAsync(Guid apartmentId, string imageUrl, int displayOrder, bool isPrimary)
+    {
+        using var conn = db.Create();
+        await conn.OpenAsync();
+        var id = await conn.ExecuteScalarAsync<Guid>(
+            """
+            INSERT INTO apartment_images (apartment_id, image_url, display_order, is_primary)
+            VALUES (@apartmentId, @imageUrl, @displayOrder, @isPrimary)
+            RETURNING id
+            """,
+            new { apartmentId, imageUrl, displayOrder, isPrimary });
+        return new ApartmentImageDto(id, imageUrl, displayOrder, isPrimary);
+    }
+
+    public async Task<string?> DeleteImageAsync(Guid imageId)
+    {
+        using var conn = db.Create();
+        await conn.OpenAsync();
+        return await conn.ExecuteScalarAsync<string?>(
+            "DELETE FROM apartment_images WHERE id = @imageId RETURNING image_url", new { imageId });
+    }
+
     private static ApartmentDto MapDto(ApartmentRow r, List<ImageRow> images)
     {
         var amenities = string.IsNullOrEmpty(r.Amenities)

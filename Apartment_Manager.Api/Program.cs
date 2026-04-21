@@ -14,6 +14,9 @@ builder.Services.AddOpenApi();
 // Database
 builder.Services.AddSingleton<DatabaseConnectionFactory>();
 
+// Storage
+builder.Services.AddHttpClient<SupabaseStorageService>();
+
 // Repositories
 builder.Services.AddScoped<ApartmentRepository>();
 builder.Services.AddScoped<BlogRepository>();
