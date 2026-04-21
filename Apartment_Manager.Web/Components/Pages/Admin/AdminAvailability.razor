@@ -1,0 +1,235 @@
+@page "/admin/apartments/{ApartmentId:guid}/availability"
+@using Apartment_Manager.Shared.DTOs
+@using Apartment_Manager.Web.Services
+@inject IApartmentApiService ApartmentService
+@inject IAdminAuthService Auth
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Availability – Admin</PageTitle>
+
+<AdminLayout>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+        <button class="btn-outline btn-sm" @onclick='() => Nav.NavigateTo("/admin/apartments")'>← Back</button>
+        <h2 class="admin-section-title" style="margin:0">
+            Availability — @(_apartment?.Title ?? "Loading…")
+        </h2>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-success">@_message</div>
+    }
+
+    @if (_loading)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+            <!-- Calendar -->
+            <div style="flex:1;min-width:320px">
+                <div class="calendar-header">
+                    <button class="calendar-nav" @onclick="PrevMonth">&#8249;</button>
+                    <span style="font-weight:600">@_month.ToString("MMMM yyyy")</span>
+                    <button class="calendar-nav" @onclick="NextMonth">&#8250;</button>
+                </div>
+
+                <div class="calendar-grid">
+                    @foreach (var name in DayNames)
+                    {
+                        <div class="calendar-day-name">@name</div>
+                    }
+                    @foreach (var day in CalendarDays)
+                    {
+                        @if (day == DateOnly.MinValue)
+                        {
+                            <div class="calendar-day other-month"></div>
+                        }
+                        else
+                        {
+                            var css = DayCss(day);
+                            <div class="calendar-day @css admin-cal-day"
+                                 style="cursor:pointer;position:relative"
+                                 @onclick="() => SelectDate(day)"
+                                 title="@DayTooltip(day)">
+                                @day.Day
+                                @if (HasPriceOverride(day))
+                                {
+                                    <span style="position:absolute;bottom:1px;right:3px;font-size:9px;color:var(--color-primary)">€</span>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div style="margin-top:16px;display:flex;gap:16px;font-size:13px">
+                    <span><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:3px;margin-right:4px"></span>Available</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:3px;margin-right:4px"></span>Blocked</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border:2px solid var(--color-primary);border-radius:3px;margin-right:4px"></span>Selected</span>
+                </div>
+            </div>
+
+            <!-- Edit panel -->
+            <div style="min-width:260px;max-width:320px">
+                @if (_selected is not null)
+                {
+                    var existing = GetRecord(_selected.Value);
+                    <div style="background:var(--color-bg-soft);border-radius:12px;padding:24px;border:1px solid var(--color-border)">
+                        <h4 style="margin:0 0 16px">@_selected.Value.ToString("d MMMM yyyy")</h4>
+
+                        <div class="form-group">
+                            <label class="form-label">Status</label>
+                            <div style="display:flex;gap:12px">
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                                    <input type="radio" name="avail" checked="@(_editAvailable)"
+                                           @onchange="() => _editAvailable = true" />
+                                    Available
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                                    <input type="radio" name="avail" checked="@(!_editAvailable)"
+                                           @onchange="() => _editAvailable = false" />
+                                    Blocked
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Price override (€) — optional</label>
+                            <input class="form-input" type="number" min="0" step="0.01"
+                                   @bind="_editPrice" placeholder="Leave blank to use base price" />
+                        </div>
+
+                        <div style="display:flex;gap:10px;margin-top:8px">
+                            <button class="btn-primary btn-sm" @onclick="SaveDate" disabled="@_saving">
+                                @(_saving ? "Saving…" : "Save")
+                            </button>
+                            @if (existing is not null)
+                            {
+                                <button class="btn-outline btn-sm" @onclick="ClearDate" disabled="@_saving">
+                                    Clear
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div style="color:var(--color-text-muted);font-size:14px;padding-top:8px">
+                        Click a date on the calendar to edit its availability or price.
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</AdminLayout>
+
+@code {
+    [Parameter] public Guid ApartmentId { get; set; }
+
+    private ApartmentDto? _apartment;
+    private List<AvailabilityDto> _availability = [];
+    private bool _loading = true;
+    private string _message = "";
+    private DateOnly _month = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _selected;
+    private bool _editAvailable = true;
+    private decimal? _editPrice;
+    private bool _saving;
+
+    private static readonly string[] DayNames = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Auth.IsAuthenticatedAsync()) { Nav.NavigateTo("/admin/login"); return; }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var aptTask = ApartmentService.GetByIdAsync(ApartmentId);
+        var avTask = ApartmentService.GetAvailabilityAsync(ApartmentId);
+        await Task.WhenAll(aptTask, avTask);
+        _apartment = aptTask.Result;
+        _availability = avTask.Result;
+        _loading = false;
+    }
+
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var first = new DateOnly(_month.Year, _month.Month, 1);
+            var offset = ((int)first.DayOfWeek + 6) % 7;
+            for (int i = 0; i < offset; i++) yield return DateOnly.MinValue;
+            var days = DateTime.DaysInMonth(_month.Year, _month.Month);
+            for (int d = 1; d <= days; d++) yield return new DateOnly(_month.Year, _month.Month, d);
+        }
+    }
+
+    private AvailabilityDto? GetRecord(DateOnly day) =>
+        _availability.FirstOrDefault(a => a.Date == day);
+
+    private bool HasPriceOverride(DateOnly day) =>
+        GetRecord(day)?.PriceOverride.HasValue == true;
+
+    private string DayCss(DateOnly day)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var record = GetRecord(day);
+        var isBlocked = record?.IsAvailable == false;
+        var css = isBlocked ? "unavailable" : "available";
+        if (day == today) css += " today";
+        if (day == _selected) css += " selected";
+        return css;
+    }
+
+    private string DayTooltip(DateOnly day)
+    {
+        var record = GetRecord(day);
+        if (record is null) return "Available (default)";
+        var status = record.IsAvailable ? "Available" : "Blocked";
+        var price = record.PriceOverride.HasValue ? $" — €{record.PriceOverride:F0}/night" : "";
+        return $"{status}{price}";
+    }
+
+    private void SelectDate(DateOnly day)
+    {
+        _selected = day;
+        var record = GetRecord(day);
+        _editAvailable = record?.IsAvailable ?? true;
+        _editPrice = record?.PriceOverride;
+    }
+
+    private async Task SaveDate()
+    {
+        if (_selected is null) return;
+        _saving = true;
+        await ApartmentService.UpsertAvailabilityAsync(ApartmentId, new UpdateAvailabilityRequest(
+            _selected.Value, _editAvailable, _editPrice));
+        await RefreshAvailability();
+        _message = $"Saved {_selected.Value:d MMMM yyyy}.";
+        _saving = false;
+    }
+
+    private async Task ClearDate()
+    {
+        if (_selected is null) return;
+        _saving = true;
+        await ApartmentService.UpsertAvailabilityAsync(ApartmentId, new UpdateAvailabilityRequest(
+            _selected.Value, true, null));
+        await RefreshAvailability();
+        _message = $"Reset {_selected.Value:d MMMM yyyy} to default.";
+        _saving = false;
+    }
+
+    private async Task RefreshAvailability()
+    {
+        _availability = await ApartmentService.GetAvailabilityAsync(ApartmentId);
+        StateHasChanged();
+    }
+
+    private void PrevMonth() => _month = _month.AddMonths(-1);
+    private void NextMonth() => _month = _month.AddMonths(1);
+}

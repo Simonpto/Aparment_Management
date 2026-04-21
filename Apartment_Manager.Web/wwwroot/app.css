@@ -242,6 +242,8 @@ h1, h2, h3, h4 { font-weight: 600; line-height: 1.2; }
 .calendar-day.unavailable { background: #fee2e2; color: #991b1b; text-decoration: line-through; }
 .calendar-day.other-month { opacity: .3; }
 .calendar-day.today { border: 2px solid var(--color-primary); }
+.calendar-day.selected { outline: 3px solid var(--color-primary); outline-offset: 1px; font-weight: 700; }
+.admin-cal-day:hover { opacity: .8; }
 
 /* ── Stars ──────────────────────────────────────────────── */
 .stars { color: #e8a800; font-size: 1.1rem; }
